@@ -165,7 +165,7 @@ namespace nda {
 
     // If array is not in C-order or not contiguous
     // copy into array with default layout and write
-    if (not a.indexmap().is_stride_order_C() or not a.indexmap().is_contiguous()) {
+    if (not std::decay_t<A>::is_stride_order_C() or not a.indexmap().is_contiguous()) {
       using h5_arr_t  = nda::array<typename A::value_type, A::rank>;
       auto a_c_layout = h5_arr_t{a.shape()};
       a_c_layout()    = a;
@@ -230,7 +230,7 @@ namespace nda {
 
     // If array is not in C-order or not contiguous
     // read into array with default layout and copy
-    constexpr bool is_stride_order_C = std::decay_t<A>::layout_t::is_stride_order_C();
+    constexpr bool is_stride_order_C = std::decay_t<A>::is_stride_order_C();
     static_assert(is_stride_order_C or is_regular_v<A>, "Cannot read into an array_view to an array with non C-style memory layout");
     if (not is_stride_order_C or not a.indexmap().is_contiguous()) {
       using h5_arr_t  = nda::array<typename A::value_type, A::rank>;
