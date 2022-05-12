@@ -71,8 +71,8 @@ namespace nda {
 
   // ----------  inverse -------------------------
 
-  template <typename T, typename L, typename AP, typename OP>
-  void inverse_in_place(basic_array_view<T, 2, L, 'M', AP, OP> a) {
+  template <MemoryMatrix M> requires(get_algebra<M> == 'M')
+  void inverse_in_place(M&& a) {
     EXPECTS(is_matrix_square(a, true));
     if(a.empty()) return;
     array<int, 1> ipiv(a.extent(0));
@@ -82,14 +82,8 @@ namespace nda {
     if (info != 0) NDA_RUNTIME_ERROR << "Inverse/Det error : matrix is not invertible. Step 2. Lapack error : " << info;
   } // namespace nda
 
-  template <typename T, typename L, typename CP>
-  void inverse_in_place(basic_array<T, 2, L, 'M', CP> &a) {
-    inverse_in_place(a());
-  }
-
-  template <Array A>
+  template <Matrix A>
   auto inverse(A const &a) requires(get_algebra<A> == 'M') {
-    static_assert(get_rank<A> == 2, "inverse: array must have rank two");
     EXPECTS(is_matrix_square(a, true));
     auto r = make_regular(a);
     inverse_in_place(r);
