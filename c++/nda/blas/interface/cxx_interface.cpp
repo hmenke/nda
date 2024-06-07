@@ -49,8 +49,8 @@ namespace {
 
 // Manual Include since cblas uses Fortan _sub to wrap function again
 #define F77_ddot F77_GLOBAL(ddot, DDOT)
-#define F77_zdotu F77_GLOBAL(zdotu, DDOT)
-#define F77_zdotc F77_GLOBAL(zdotc, DDOT)
+#define F77_zdotu F77_GLOBAL(zdotu, ZDOTU)
+#define F77_zdotc F77_GLOBAL(zdotc, ZDOTC)
 extern "C" {
 double F77_ddot(FINT, const double *, FINT, const double *, FINT);
 nda_complex_double F77_zdotu(FINT, const double *, FINT, const double *, FINT); // NOLINT
