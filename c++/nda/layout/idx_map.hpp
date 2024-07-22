@@ -105,10 +105,10 @@ namespace nda {
     static_assert((StrideOrder != 0) or (Rank == 1), "Error in nda::idx_map: StrideOrder can only be zero for 1D arrays");
 
     // Extents of all dimensions (the shape of the map).
-    std::array<long, Rank> len;
+    std::array<long, Rank> len{};
 
     // Strides of all dimensions.
-    std::array<long, Rank> str;
+    std::array<long, Rank> str{};
 
     public:
     /// Encoded static extents.
@@ -319,9 +319,6 @@ namespace nda {
       if constexpr (n_dynamic_extents == 0) {
         for (int u = 0; u < Rank; ++u) len[u] = static_extents[u];
         compute_strides_contiguous();
-      } else {
-        for (int u = 0; u < Rank; ++u)
-          len[u] = 0; // FIXME. Needed ? To have the proper invariant of the array : shape = (0,0,...) and pointer is null
       }
     }
 

@@ -33,6 +33,22 @@ std::array<long, sizeof...(Is)> make_array(Is... is) {
   return {is...};
 }
 
+TEST(NDA, IdxMapDefaultConstructed) {
+  // default constructed 3D index map in C-order
+  idx_map<3, 0, C_stride_order<3>, layout_prop_e::none> idxm{};
+  EXPECT_EQ(idxm.rank(), 3);
+  EXPECT_EQ(idxm.size(), 0);
+  EXPECT_EQ(idxm.ce_size(), 0);
+  EXPECT_EQ(idxm.lengths(), make_array(0, 0, 0));
+  EXPECT_EQ(idxm.strides(), make_array(0, 0, 0));
+  EXPECT_EQ(idxm.stride_order, (std::array<int, 3>{0, 1, 2}));
+  EXPECT_TRUE(idxm.is_contiguous());
+  EXPECT_TRUE(idxm.is_strided_1d());
+  EXPECT_TRUE(idxm.has_positive_strides());
+  EXPECT_TRUE(idxm.is_stride_order_C());
+  EXPECT_TRUE(idxm.is_stride_order_valid());
+}
+
 TEST(NDA, IdxMapContiguousCOrder) {
   // contiguous 2x3x4 index map in C-order
   idx_map<3, 0, C_stride_order<3>, layout_prop_e::contiguous> idxm{{2, 3, 4}};
