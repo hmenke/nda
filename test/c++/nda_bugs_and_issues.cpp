@@ -169,3 +169,21 @@ TEST(NDA, IsStrided1DAndIsContiguousIssue) {
   EXPECT_TRUE(B_v1.indexmap().has_positive_strides());
   EXPECT_TRUE(B_v1.indexmap().is_strided_1d());
 }
+
+TEST(NDA, LayoutAfterReshapeIssue) {
+  // issue concerning the resulting layout after a reshape operation
+  auto check = [](const auto &a) {
+    auto b = nda::flatten(a);
+    EXPECT_EQ(b.stride_order(), (std::array<int, 1>{0}));
+    EXPECT_EQ(b.strides(), (std::array<long, 1>{1}));
+    EXPECT_TRUE(b.is_contiguous());
+    EXPECT_TRUE(b.has_positive_strides());
+    EXPECT_TRUE(b.is_stride_order_C());
+  };
+  nda::array<int, 3> A(2, 2, 2);
+  check(A);
+  nda::array<int, 3, nda::F_layout> B(2, 2, 2);
+  check(B);
+  nda::array<int, 3, nda::basic_layout<0, nda::encode(std::array{1, 2, 0}), nda::layout_prop_e::contiguous>> C(2, 2, 2);
+  check(C);
+}

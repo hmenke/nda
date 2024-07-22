@@ -112,13 +112,15 @@ namespace nda {
     EXPECTS_WITH_MESSAGE(a.is_contiguous(), "Error in nda::reshape: Only contiguous arrays/views are supported");
     EXPECTS_WITH_MESSAGE(a.has_positive_strides(), "Error in nda::reshape: Only arrays/views with positive strides are supported")
 
-    // restrict supported layouts (why?)
+    // restrict supported layouts
     using A_t = std::remove_cvref_t<A>;
     static_assert(A_t::is_stride_order_C() or A_t::is_stride_order_Fortran() or R == 1,
                   "Error in nda::reshape: Only C or Fortran layouts are supported");
 
     // prepare new idx_map
-    using layout_t = typename std::decay_t<A>::layout_policy_t::template mapping<R>;
+    // 1D case --> resulting layout is always C
+    // multi-dimensional case (only C or Fortran layout allowed) --> resulting layout is the same as the input
+    using layout_t = std::conditional_t<(R == 1), C_layout::template mapping<1>, typename std::decay_t<A>::layout_policy_t::template mapping<R>>;
     return map_layout_transform(std::forward<A>(a), layout_t{stdutil::make_std_array<long>(new_shape)});
   }
 
