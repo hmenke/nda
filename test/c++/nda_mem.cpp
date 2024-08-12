@@ -112,10 +112,14 @@ H check_handle() {
   // check copy operations
   H copy1(handle), copy2{};
   copy2 = handle;
+#ifdef __clang__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wself-assign-overloaded"
+#endif // __clang__
   handle = handle; // NOLINT (we want to check self assignment)
+#ifdef __clang__
 #pragma GCC diagnostic pop
+#endif // __clang__
   EXPECT_EQ(handle.size(), size);
   EXPECT_EQ(handle.size(), copy1.size());
   EXPECT_EQ(handle.size(), copy2.size());

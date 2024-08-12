@@ -465,12 +465,14 @@ namespace nda {
     {
       using namespace std::complex_literals;
       auto static gen  = std::mt19937(std::random_device{}());
-      auto static dist = std::uniform_real_distribution<>(0.0, 1.0);
       auto res         = basic_array{shape};
-      if constexpr (nda::is_complex_v<ValueType>)
+      if constexpr (nda::is_complex_v<ValueType>) {
+        auto static dist = std::uniform_real_distribution<typename ValueType::value_type>(0.0, 1.0);
         for (auto &x : res) x = dist(gen) + 1i * dist(gen);
-      else
+      } else {
+        auto static dist = std::uniform_real_distribution<ValueType>(0.0, 1.0);
         for (auto &x : res) x = dist(gen);
+      }
       return res;
     }
 
