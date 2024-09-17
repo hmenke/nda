@@ -289,12 +289,15 @@ namespace nda {
      * @param a nda::ArrayOfRank object.
      */
     template <ArrayOfRank<Rank> A>
-      requires(HasValueTypeConstructibleFrom<A, value_type>)
+      requires(HasValueTypeConstructibleFrom<A, ValueType>)
     basic_array(A const &a) : lay(a.shape()), sto{lay.size(), mem::do_not_initialize} {
-      static_assert(std::is_constructible_v<value_type, get_value_t<A>>, "Error in nda::basic_array: Incompatible value types in constructor");
+      static_assert(std::is_constructible_v<ValueType, get_value_t<A>>, "Error in nda::basic_array: Incompatible value types in constructor");
       if constexpr (std::is_trivial_v<ValueType> or is_complex_v<ValueType>) {
         // trivial and complex value types can use the optimized assign_from_ndarray
-        assign_from_ndarray(a);
+        if constexpr (std::is_same_v<ValueType, get_value_t<A>>)
+          assign_from_ndarray(a);
+        else
+          assign_from_ndarray(nda::map([](auto const &val) { return ValueType(val); })(a));
       } else {
         // general value types may not be default constructible -> use placement new
         nda::for_each(lay.lengths(), [&](auto const &...is) { new (sto.data() + lay(is...)) ValueType{a(is...)}; });
