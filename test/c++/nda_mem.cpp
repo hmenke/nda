@@ -194,7 +194,8 @@ TEST(NDA, MemoryMallocMemcpyMemset) {
   check_malloc_memcpy_memset<mem::Host, mem::Host>();
   check_malloc_memcpy2D_memset2D<mem::Host, mem::Host>();
 
-  if constexpr (have_device && have_cuda) {
+#ifdef NDA_HAVE_CUDA
+  {
     // host to device
     check_malloc_memcpy_memset<mem::Host, mem::Device>();
     check_malloc_memcpy2D_memset2D<mem::Host, mem::Device>();
@@ -207,6 +208,7 @@ TEST(NDA, MemoryMallocMemcpyMemset) {
     check_malloc_memcpy_memset<mem::Device, mem::Device>();
     check_malloc_memcpy2D_memset2D<mem::Device, mem::Device>();
   }
+#endif
 }
 
 TEST(NDA, MemoryMallocator) {
@@ -220,7 +222,8 @@ TEST(NDA, MemoryMallocator) {
   allo1.deallocate(mb1);
 
   // device
-  if constexpr (have_device && have_cuda) {
+#ifdef NDA_HAVE_CUDA
+  {
     auto allo2 = mem::mallocator<mem::Device>();
     auto mb2   = allo2.allocate_zero(size);
     EXPECT_EQ(mb2.s, size);
@@ -230,6 +233,7 @@ TEST(NDA, MemoryMallocator) {
     allo2.deallocate(mb2);
     allo1.deallocate(mb3);
   }
+#endif
 }
 
 TEST(NDA, MemoryBucketAllocator) {
@@ -367,7 +371,8 @@ TEST(NDA, MemoryHandleHeap) {
   for (int i = 0; i < host_foo2.size(); ++i) { EXPECT_EQ(host_foo2[i], stack_foo[i]); }
 
   // test on device
-  if constexpr (have_device && have_cuda) {
+#ifdef NDA_HAVE_CUDA
+  {
     using device_trivial_t = mem::handle_heap<int, mem::mallocator<mem::Device>>;
 
     // construct on the device
@@ -383,6 +388,7 @@ TEST(NDA, MemoryHandleHeap) {
     EXPECT_EQ(host_trivial2.size(), host_trivial.size());
     for (int i = 0; i < host_trivial2.size(); ++i) { EXPECT_EQ(host_trivial2[i], host_trivial[i]); }
   }
+#endif
 
   // check correct construction and destruction of non-trivial objects
   {
