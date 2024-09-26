@@ -82,11 +82,21 @@ TEST_F(NDAAlgorithm, MinElement) {
 TEST_F(NDAAlgorithm, Sum) {
   EXPECT_DOUBLE_EQ(nda::sum(A_d), std::accumulate(A_d.begin(), A_d.end(), 0.0));
   EXPECT_COMPLEX_NEAR(nda::sum(A_c), std::accumulate(A_c.begin(), A_c.end(), std::complex<double>{0.0, 0.0}));
+
+  auto A_arr = nda::array<decltype(A_d), 1>{A_d, A_d};
+  EXPECT_ARRAY_EQ(nda::sum(A_arr), A_d + A_d);
 }
 
 TEST_F(NDAAlgorithm, Product) {
   EXPECT_DOUBLE_EQ(nda::product(A_d), std::accumulate(A_d.begin(), A_d.end(), 1.0, std::multiplies<>{}));
   EXPECT_COMPLEX_NEAR(nda::product(A_c), std::accumulate(A_c.begin(), A_c.end(), std::complex<double>{1.0, 0.0}, std::multiplies<>{}));
+
+  auto A_arr = nda::array<decltype(A_d), 1>{A_d, A_d};
+  EXPECT_ARRAY_EQ(nda::product(A_arr), A_d * A_d);
+
+  auto Id    = nda::eye<double>(2);
+  auto A_mat = nda::array<decltype(Id), 1>{Id, Id};
+  EXPECT_ARRAY_EQ(nda::product(A_mat), Id);
 }
 
 TEST_F(NDAAlgorithm, CustomFold) {

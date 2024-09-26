@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include "./basic_functions.hpp"
 #include "./concepts.hpp"
 #include "./layout/for_each.hpp"
 #include "./layout/range.hpp"
@@ -67,9 +68,10 @@ namespace nda {
   template <Array A, typename F, typename R>
   auto fold(F f, A const &a, R r) {
     // cast the initial value to the return type of f to avoid narrowing
-    decltype(f(r, get_value_t<A>{})) r2 = r;
-    nda::for_each(a.shape(), [&a, &r2, &f](auto &&...args) { r2 = f(r2, a(args...)); });
-    return r2;
+    using res_t = std::decay_t<decltype(make_regular(f(r, get_value_t<A>{})))>;
+    auto res    = res_t{r};
+    nda::for_each(a.shape(), [&a, &res, &f](auto &&...args) { res = f(res, a(args...)); });
+    return res;
   }
 
   /// The same as nda::fold, except that the initial value is a default constructed value type of the array.
@@ -183,11 +185,15 @@ namespace nda {
    * @param a nda::Array object.
    * @return Sum of all elements.
    */
-  template <Array A>
+  template <Array A, typename Value = get_value_t<A>>
   auto sum(A const &a)
-    requires(nda::is_scalar_v<get_value_t<A>>)
+    requires(nda::Scalar<Value> or nda::Array<Value>)
   {
-    return fold(std::plus<>{}, a);
+    if constexpr (nda::Scalar<Value>) {
+      return fold(std::plus<>{}, a);
+    } else { // Array<Value>
+      return fold(std::plus<>{}, a, Value::zeros(get_first_element(a).shape()));
+    }
   }
 
   /**
@@ -197,11 +203,15 @@ namespace nda {
    * @param a nda::Array object.
    * @return Product of all elements.
    */
-  template <Array A>
+  template <Array A, typename Value = get_value_t<A>>
   auto product(A const &a)
-    requires(nda::is_scalar_v<get_value_t<A>>)
+    requires(nda::Scalar<Value> or nda::Array<Value>)
   {
-    return fold(std::multiplies<>{}, a, get_value_t<A>{1});
+    if constexpr (nda::Scalar<Value>) {
+      return fold(std::multiplies<>{}, a, get_value_t<A>{1});
+    } else { // Array<Value>
+      return fold(std::multiplies<>{}, a, Value::ones(get_first_element(a).shape()));
+    }
   }
 
   /**
