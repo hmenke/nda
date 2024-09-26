@@ -23,14 +23,19 @@
 
 #include "./concepts.hpp"
 #include "./layout/for_each.hpp"
+#include "./layout/range.hpp"
+#include "./macros.hpp"
+#include "./map.hpp"
 #include "./traits.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <functional>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace nda {
 
@@ -198,6 +203,66 @@ namespace nda {
   {
     return fold(std::multiplies<>{}, a, get_value_t<A>{1});
   }
+
+  /**
+   * @brief Hadamard product of two nda::Array objects.
+   *
+   * @tparam A nda::Array type.
+   * @tparam B nda::Array type.
+   * @param a nda::Array object.
+   * @param b nda::Array object.
+   * @return A lazy nda::expr_call object representing the elementwise product of the two input objects.
+   */
+  template <Array A, Array B>
+    requires(nda::get_rank<A> == nda::get_rank<B>)
+  [[nodiscard]] constexpr auto hadamard(A &&a, B &&b) {
+    return nda::map([](auto const &x, auto const &y) { return x * y; })(std::forward<A>(a), std::forward<B>(b));
+  }
+
+  /**
+   * @brief Hadamard product of two std::array objects.
+   *
+   * @tparam T Value type of the first array.
+   * @tparam U Value type of the second array.
+   * @tparam R Size of the arrays.
+   * @param a std::array object.
+   * @param b std::array object.
+   * @return std::array containing the elementwise product of the two input arrays.
+   */
+  template <typename T, typename U, size_t R>
+  [[nodiscard]] constexpr auto hadamard(std::array<T, R> const &a, std::array<U, R> const &b) {
+    return a * b;
+  }
+
+  /**
+   * @brief Hadamard product of two std::vector objects.
+   *
+   * @tparam T Value type of the first input vector.
+   * @tparam U Value type of the second input vector.
+   * @param a std::vector object.
+   * @param b std::vector object.
+   * @return std::vector containing the elementwise product of the two input vectors.
+   */
+  template <typename T, typename U>
+  [[nodiscard]] constexpr auto hadamard(std::vector<T> const &a, std::vector<U> const &b) {
+    using TU = decltype(std::declval<T>() * std::declval<U>());
+    EXPECTS(a.size() == b.size());
+
+    std::vector<TU> c(a.size());
+    for (auto i : range(c.size())) c[i] = a[i] * b[i];
+    return c;
+  }
+
+  /**
+   * @brief Hadamard product of two arithmetic types.
+   *
+   * @tparam T nda::Scalar type of the first input.
+   * @tparam U nda::Scalar type of the second input.
+   * @param a First input.
+   * @param b Second input.
+   * @return Product of the two inputs.
+   */
+  constexpr auto hadamard(nda::Scalar auto a, nda::Scalar auto b) { return a * b; }
 
   /** @} */
 
