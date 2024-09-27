@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Authors: Jason Kaye, Olivier Parcollet, Nils Wentzell
-/**
- * @file
- * @brief Provides worker classes that can be used for solving linear least square problems.
- */
+// Authors: Thomas Hahn, Jason Kaye, Olivier Parcollet, Nils Wentzell
 
 #pragma once
 

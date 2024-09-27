@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Authors: Thomas Hahn
+// Authors: Thomas Hahn, Nils Wentzell
 
 #include "./test_common.hpp"
 

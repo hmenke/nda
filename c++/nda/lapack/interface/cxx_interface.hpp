@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Authors: Jason Kaye, Miguel Morales, Olivier Parcollet, Nils Wentzell
+// Authors: Thomas Hahn, Jason Kaye, Miguel Morales, Olivier Parcollet, Nils Wentzell
 
 /**
  * @file
