@@ -186,14 +186,91 @@ TEST_F(NDAMpi, BroadcastOtherLayouts) {
   }
 }
 
-TEST_F(NDAMpi, Gather) {
-  // all gather an array
-  auto B               = nda::make_regular(A * (comm.rank() + 1));
-  decltype(B) B_gather = mpi::all_gather(B, comm);
-  EXPECT_EQ(B_gather.shape()[0], comm.size() * B.shape()[0]);
+TEST_F(NDAMpi, Gather1DArray) {
+  // allgather 1-dimensional arrays of different sizes
+  auto C        = nda::array<int, 1>(comm.rank() + 1);
+  C             = comm.rank();
+  auto C_gather = mpi::all_gather(C, comm);
+  EXPECT_EQ(C_gather.size(), comm.size() * (comm.size() + 1) / 2);
   for (int i = 0; i < comm.size(); ++i) {
-    auto view = B_gather(nda::range(i * B.shape()[0], (i + 1) * B.shape()[0]), nda::range::all, nda::range::all);
+    auto view = C_gather(nda::range(i * (i + 1) / 2, (i + 1) * (i + 2) / 2));
+    auto exp  = nda::array<int, 1>(i + 1, i);
+    EXPECT_ARRAY_EQ(exp, view);
+  }
+}
+
+TEST_F(NDAMpi, GatherCLayout) {
+  // allgather C-layout arrays
+  auto B        = nda::make_regular(A * (comm.rank() + 1));
+  auto B_gather = mpi::all_gather(B, comm);
+  EXPECT_EQ(B_gather.shape(), (std::array{comm.size() * shape_3d[0], shape_3d[1], shape_3d[2]}));
+  for (int i = 0; i < comm.size(); ++i) {
+    auto view = B_gather(nda::range(i * shape_3d[0], (i + 1) * shape_3d[0]), nda::range::all, nda::range::all);
     EXPECT_ARRAY_EQ(nda::make_regular(A * (i + 1)), view);
+  }
+
+  // gather C-layout matrix views
+  auto rg       = nda::range(0, 2);
+  decltype(M) N = nda::make_regular(M * (comm.rank() + 1));
+  auto N_gather = mpi::gather(N(rg, nda::range::all), comm);
+  if (comm.rank() == root) {
+    EXPECT_EQ(N_gather.shape(), (std::array<long, 2>{comm.size() * 2l, shape_2d[1]}));
+    for (long i = 0; i < comm.size(); ++i) {
+      auto view = N_gather(nda::range(i * 2, (i + 1) * 2), nda::range::all);
+      auto exp  = nda::make_regular(M * (i + 1));
+      EXPECT_ARRAY_EQ(exp(rg, nda::range::all), view);
+    }
+  } else {
+    EXPECT_TRUE(N_gather.empty());
+    EXPECT_TRUE(N_gather.size() == 0);
+  }
+}
+
+TEST_F(NDAMpi, GatherOtherLayouts) {
+  // allgather non C-layout arrays by first reshaping it
+  constexpr auto perm     = decltype(A2)::layout_t::stride_order;
+  constexpr auto inv_perm = nda::permutations::inverse(perm);
+
+  decltype(A2) B2  = nda::make_regular(A2 * (comm.rank() + 1));
+  auto B2_gather   = mpi::all_gather(nda::permuted_indices_view<nda::encode(inv_perm)>(B2), comm);
+  auto B2_gather_v = nda::permuted_indices_view<nda::encode(perm)>(B2_gather);
+  for (int i = 0; i < comm.size(); ++i) {
+    auto view = B2_gather_v(nda::range::all, nda::range(i * shape_3d[1], (i + 1) * shape_3d[1]), nda::range::all);
+    EXPECT_ARRAY_EQ(nda::make_regular(A2 * (i + 1)), view);
+  }
+}
+
+TEST_F(NDAMpi, GatherCustomType) {
+  // allgather an array of matrices
+  using matrix_t = nda::matrix<int>;
+  nda::array<matrix_t, 1> B(2);
+  nda::array<matrix_t, 1> exp(2 * comm.size());
+  for (int i = 0; i < comm.size(); ++i) {
+    exp(i * 2)     = matrix_t::zeros(shape_2d);
+    exp(i * 2 + 1) = matrix_t::zeros(shape_2d);
+    exp(i * 2)     = i;
+    exp(i * 2 + 1) = i + 1;
+    if (i == comm.rank()) {
+      B(0) = exp(i * 2);
+      B(1) = exp(i * 2 + 1);
+    }
+  }
+
+  auto B_gathered = mpi::all_gather(B, comm);
+  EXPECT_EQ(B_gathered.shape(), (std::array<long, 1>{2l * comm.size()}));
+  for (int i = 0; i < B_gathered.size(); ++i) { EXPECT_ARRAY_EQ(exp(i), B_gathered(i)); }
+}
+
+TEST_F(NDAMpi, LazyGather) {
+  // lazy-allgather 1-dimensional arrays of different sizes
+  auto C               = nda::array<int, 1>(comm.rank() + 1);
+  C                    = comm.rank();
+  decltype(C) C_gather = nda::lazy_mpi_gather(C, comm, root, true);
+  EXPECT_EQ(C_gather.size(), comm.size() * (comm.size() + 1) / 2);
+  for (int i = 0; i < comm.size(); ++i) {
+    auto view = C_gather(nda::range(i * (i + 1) / 2, (i + 1) * (i + 2) / 2));
+    auto exp  = nda::array<int, 1>(i + 1, i);
+    EXPECT_ARRAY_EQ(exp, view);
   }
 }
 
