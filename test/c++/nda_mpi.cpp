@@ -274,17 +274,84 @@ TEST_F(NDAMpi, LazyGather) {
   }
 }
 
-TEST_F(NDAMpi, Reduce) {
+TEST_F(NDAMpi, ReduceCLayout) {
   // reduce an array
-  decltype(A) A_sum = mpi::reduce(A, comm);
+  auto A_sum = mpi::reduce(A, comm);
   if (mpi_rank == 0) { EXPECT_ARRAY_EQ(nda::make_regular(A * mpi_size), A_sum); }
 
-  // all reduce an array view
-  auto B                  = nda::make_regular(A * (mpi_rank + 1));
-  nda::vector<long> B_max = mpi::all_reduce(B(0, 0, _), comm, MPI_MAX);
-  nda::vector<long> B_min = mpi::all_reduce(B(0, 0, _), comm, MPI_MIN);
+  // allreduce an array
+  auto A_sum_all = mpi::all_reduce(A, comm);
+  EXPECT_ARRAY_EQ(nda::make_regular(A * mpi_size), A_sum_all);
+
+  // allreduce an array view
+  auto B     = nda::make_regular(A * (mpi_rank + 1));
+  auto B_max = mpi::all_reduce(B(0, 0, _), comm, MPI_MAX);
   EXPECT_ARRAY_EQ(B_max, A(0, 0, _) * mpi_size);
-  EXPECT_ARRAY_EQ(B_min, A(0, 0, _));
+  auto B_min = mpi::reduce(B(0, 0, _), comm, mpi_size - 1, false, MPI_MIN);
+  if (mpi_rank == mpi_size - 1) EXPECT_ARRAY_EQ(B_min, A(0, 0, _));
+}
+
+TEST_F(NDAMpi, ReduceCLayoutInPlace) {
+  // in-place reduce an array
+  auto B = A;
+  mpi::reduce_in_place(B, comm);
+  if (mpi_rank == 0) {
+    EXPECT_ARRAY_EQ(nda::make_regular(A * mpi_size), B);
+  } else {
+    EXPECT_ARRAY_EQ(A, B)
+  };
+
+  // in-place allreduce an array
+  B = A;
+  mpi::all_reduce_in_place(B, comm);
+  EXPECT_ARRAY_EQ(nda::make_regular(A * mpi_size), B);
+
+  // in-place (all)reduce an array view
+  B = A * (mpi_rank + 1);
+  mpi::all_reduce_in_place(B(0, 0, _), comm, MPI_MAX);
+  EXPECT_ARRAY_EQ(B(0, 0, _), A(0, 0, _) * mpi_size);
+  mpi::reduce_in_place(B(0, 1, _), comm, mpi_size - 1, false, MPI_MIN);
+  if (mpi_rank == mpi_size - 1) EXPECT_ARRAY_EQ(B(0, 1, _), A(0, 1, _));
+}
+
+TEST_F(NDAMpi, ReduceOtherLayouts) {
+  // reduce an array
+  auto A2_sum = mpi::reduce(A2, comm);
+  if (mpi_rank == 0) { EXPECT_ARRAY_EQ(nda::make_regular(A2 * mpi_size), A2_sum); }
+
+  // allreduce an array
+  auto A2_sum_all = mpi::all_reduce(A2, comm);
+  EXPECT_ARRAY_EQ(nda::make_regular(A2 * mpi_size), A2_sum_all);
+
+  // all reduce an array view
+  decltype(A2) B2 = A2 * (mpi_rank + 1);
+  auto B2_max     = mpi::all_reduce(B2(_, 0, 0), comm, MPI_MAX);
+  EXPECT_ARRAY_EQ(B2_max, A2(_, 0, 0) * mpi_size);
+  auto B2_min = mpi::reduce(B2(_, 0, 0), comm, mpi_size - 1, false, MPI_MIN);
+  if (mpi_rank == mpi_size - 1) EXPECT_ARRAY_EQ(B2_min, A2(_, 0, 0));
+}
+
+TEST_F(NDAMpi, ReduceOtherLayoutsInPlace) {
+  // in-place reduce an array
+  auto B2 = A2;
+  mpi::reduce_in_place(B2, comm);
+  if (mpi_rank == 0) {
+    EXPECT_ARRAY_EQ(nda::make_regular(A2 * mpi_size), B2);
+  } else {
+    EXPECT_ARRAY_EQ(A2, B2)
+  };
+
+  // in-place allreduce an array
+  B2 = A2;
+  mpi::all_reduce_in_place(B2, comm);
+  EXPECT_ARRAY_EQ(nda::make_regular(A2 * mpi_size), B2);
+
+  // in-place (all)reduce an array view
+  B2 = A2 * (mpi_rank + 1);
+  mpi::all_reduce_in_place(B2(_, 0, 0), comm, MPI_MAX);
+  EXPECT_ARRAY_EQ(B2(_, 0, 0), A2(_, 0, 0) * mpi_size);
+  mpi::reduce_in_place(B2(_, 0, 1), comm, mpi_size - 1, false, MPI_MIN);
+  if (mpi_rank == mpi_size - 1) EXPECT_ARRAY_EQ(B2(_, 0, 1), A2(_, 0, 1));
 }
 
 TEST_F(NDAMpi, ReduceCustomType) {
@@ -303,9 +370,24 @@ TEST_F(NDAMpi, ReduceCustomType) {
     exp_sum(i)(k_, l_) << i * (mpi_size + 1) * mpi_size / 2 * (k_ + l_);
   }
 
-  nda::vector<matrix_t> B_sum = mpi::all_reduce(B, comm);
+  auto B_sum = mpi::all_reduce(B, comm);
 
   EXPECT_ARRAY_EQ(B_sum, exp_sum);
+}
+
+TEST_F(NDAMpi, LazyReduce) {
+  // lazy-reduce an array
+  decltype(A) A_sum = nda::lazy_mpi_reduce(A, comm);
+  if (mpi_rank == 0) {
+    EXPECT_ARRAY_EQ(nda::make_regular(A * mpi_size), A_sum);
+  } else {
+    EXPECT_EQ(A_sum.size(), 0);
+  }
+
+  // lazy-allreduce an array in-place
+  auto B2 = A2;
+  B2 = nda::lazy_mpi_reduce(B2, comm, root, true);
+  EXPECT_ARRAY_EQ(nda::make_regular(A2 * mpi_size), B2);
 }
 
 TEST_F(NDAMpi, Scatter) {
