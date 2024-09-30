@@ -38,12 +38,16 @@ struct NDAMpi : public ::testing::Test {
         M(i, j) = std::complex<double>(x, x + 1.0);
       }
     }
+    A2 = A;
+    M2 = M;
   }
 
   std::array<long, 3> shape_3d{6, 4, 2};
   nda::array<long, 3> A;
+  nda::array<long, 3, nda::basic_layout<0, nda::encode(std::array{1, 2, 0}), nda::layout_prop_e::contiguous>> A2;
   std::array<long, 2> shape_2d{4, 4};
   nda::matrix<std::complex<double>> M;
+  nda::matrix<std::complex<double>, nda::F_layout> M2;
   const int root = 0;
   mpi::communicator comm;
 };
@@ -80,39 +84,105 @@ TEST_F(NDAMpi, ExpectEqualShapeSaveFirst) {
   }
 }
 
-TEST_F(NDAMpi, Broadcast) {
+TEST_F(NDAMpi, BroadcastCLayout) {
   // broadcast to arrays with same dimensions
   auto A_bcast = A;
-  if (comm.rank() != root) {
+  if (comm.rank() == root) {
+    EXPECT_ARRAY_EQ(A, A_bcast);
+  } else {
     A_bcast = 0;
     EXPECT_ARRAY_ZERO(A_bcast);
-  } else {
-    EXPECT_ARRAY_EQ(A, A_bcast);
   }
   mpi::broadcast(A_bcast, comm, root);
   EXPECT_ARRAY_EQ(A, A_bcast);
 
   // broadcast to arrays with different dimensions
   decltype(A) B_bcast;
-  if (comm.rank() != root) {
-    EXPECT_NE(A.shape(), B_bcast.shape());
-  } else {
+  if (comm.rank() == root) {
     B_bcast = A;
     EXPECT_ARRAY_EQ(A, B_bcast);
+  } else {
+    EXPECT_NE(A.shape(), B_bcast.shape());
   }
   mpi::broadcast(B_bcast, comm, root);
   EXPECT_ARRAY_EQ(A, B_bcast);
 
   // broadcast a matrix into an array view
-  if (comm.rank() != root) {
+  if (comm.rank() == root) {
+    mpi::broadcast(M, comm, root);
+  } else {
     auto C_bcast = nda::array<std::complex<double>, 3>::zeros(2, shape_2d[0], shape_2d[1]);
     EXPECT_ARRAY_ZERO(C_bcast);
     auto C_view = C_bcast(1, nda::ellipsis{});
     mpi::broadcast(C_view, comm, root);
     EXPECT_ARRAY_EQ(M, C_view);
     EXPECT_ARRAY_ZERO(C_bcast(0, nda::ellipsis{}));
+  }
+
+  // broadcast a view to views
+  if (comm.rank() == root) {
+    mpi::broadcast(M(0, nda::range::all), comm, root);
   } else {
-    mpi::broadcast(M);
+    auto M_bcast = M;
+    M_bcast      = 0;
+    mpi::broadcast(M_bcast(0, nda::range::all), comm, root);
+    EXPECT_ARRAY_ZERO(M_bcast(nda::range(1, shape_2d[0]), nda::range::all));
+    EXPECT_ARRAY_EQ(M_bcast(0, nda::range::all), M(0, nda::range::all));
+  }
+}
+
+TEST_F(NDAMpi, BroadcastOtherLayouts) {
+  // broadcast to arrays with same dimensions
+  auto A2_bcast = A2;
+  if (comm.rank() == root) {
+    EXPECT_ARRAY_EQ(A2, A2_bcast);
+  } else {
+    A2_bcast = 0;
+    EXPECT_ARRAY_ZERO(A2_bcast);
+  }
+  mpi::broadcast(A2_bcast, comm, root);
+  EXPECT_ARRAY_EQ(A2, A2_bcast);
+
+  // broadcast to arrays with different dimensions
+  decltype(A2) B2_bcast;
+  if (comm.rank() == root) {
+    B2_bcast = A2;
+    EXPECT_ARRAY_EQ(A2, B2_bcast);
+  } else {
+    EXPECT_NE(A2.shape(), B2_bcast.shape());
+  }
+  mpi::broadcast(B2_bcast, comm, root);
+  EXPECT_ARRAY_EQ(A2, B2_bcast);
+
+  // broadcast a matrix into an array view
+  if (comm.rank() == root) {
+    mpi::broadcast(M2, comm, root);
+  } else {
+    auto C2_bcast = nda::array<std::complex<double>, 3, nda::F_layout>::zeros(shape_2d[0], shape_2d[1], 2);
+    EXPECT_ARRAY_ZERO(C2_bcast);
+    auto C2_view = C2_bcast(nda::ellipsis{}, 1);
+    mpi::broadcast(C2_view, comm, root);
+    EXPECT_ARRAY_EQ(M2, C2_view);
+    EXPECT_ARRAY_ZERO(C2_bcast(nda::ellipsis{}, 0));
+  }
+
+  // broadcast a view to views
+  if (comm.rank() == root) {
+    mpi::broadcast(M2(nda::range::all, 0), comm, root);
+  } else {
+    auto M2_bcast = M2;
+    M2_bcast      = 0;
+    mpi::broadcast(M2_bcast(nda::range::all, 0), comm, root);
+    EXPECT_ARRAY_ZERO(M2_bcast(nda::range::all, nda::range(1, shape_2d[1])));
+    EXPECT_ARRAY_EQ(M2_bcast(nda::range::all, 0), M2(nda::range::all, 0));
+  }
+
+  // broadcast a C layout matrix into an F layout matrix
+  if (comm.rank() == root) {
+    mpi::broadcast(M, comm, root);
+  } else {
+    mpi::broadcast(M2, comm, root);
+    EXPECT_ARRAY_EQ(nda::transpose(M), M2);
   }
 }
 
