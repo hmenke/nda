@@ -49,6 +49,17 @@ namespace nda {
       }
     }
 
+    // Get the complex conjugate of a scalar.
+    template <nda::Scalar S>
+    auto conj(S x)
+    {
+      if constexpr (is_complex_v<S>) {
+        return std::conj(x);
+      } else {
+        return x;
+      }
+    }
+
     // Get the squared absolute value of a double.
     inline double abs2(double x) { return x * x; }
 
@@ -60,14 +71,7 @@ namespace nda {
 
     // Functor for nda::detail::conj.
     struct conj_f {
-      template <nda::Scalar S>
-      auto operator()(S x) const {
-        if constexpr (is_complex_v<S>) {
-          return std::conj(x);
-        } else {
-          return x;
-        }
-      }
+      auto operator()(auto const &x) const { return conj(x); };
     };
 
   } // namespace detail
