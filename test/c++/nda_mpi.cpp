@@ -276,18 +276,18 @@ TEST_F(NDAMpi, LazyGather) {
 
 TEST_F(NDAMpi, ScatterCLayout) {
   // scatter a C-layout array
-  auto A_scatter1 = mpi::scatter(A, comm);
-  auto rg1        = itertools::chunk_range(0, A.shape()[0], comm.size(), comm.rank());
-  auto exp_shape1 = std::array<long, 3>{rg1.second - rg1.first, shape_3d[1], shape_3d[2]};
+  auto A_scatter1   = mpi::scatter(A, comm);
+  auto [beg1, end1] = itertools::chunk_range(0, A.shape()[0], comm.size(), comm.rank());
+  auto exp_shape1   = std::array{end1 - beg1, shape_3d[1], shape_3d[2]};
   EXPECT_EQ(exp_shape1, A_scatter1.shape());
-  EXPECT_ARRAY_EQ(A(nda::range(rg1.first, rg1.second), nda::ellipsis{}), A_scatter1);
+  EXPECT_ARRAY_EQ(A(nda::range(beg1, end1), nda::ellipsis{}), A_scatter1);
 
   // scatter a C-layout array view
-  auto A_scatter2 = mpi::scatter(A(0, nda::ellipsis{}), comm);
-  auto rg2        = itertools::chunk_range(0, A.shape()[1], comm.size(), comm.rank());
-  auto exp_shape2 = std::array<long, 2>{rg2.second - rg2.first, shape_3d[2]};
+  auto A_scatter2   = mpi::scatter(A(0, nda::ellipsis{}), comm);
+  auto [beg2, end2] = itertools::chunk_range(0, A.shape()[1], comm.size(), comm.rank());
+  auto exp_shape2   = std::array{end2 - beg2, shape_3d[2]};
   EXPECT_EQ(exp_shape2, A_scatter2.shape());
-  EXPECT_ARRAY_EQ(A(0, nda::range(rg2.first, rg2.second), nda::ellipsis{}), A_scatter2);
+  EXPECT_ARRAY_EQ(A(0, nda::range(beg2, end2), nda::ellipsis{}), A_scatter2);
 }
 
 TEST_F(NDAMpi, ScatterOtherLayouts) {
@@ -298,7 +298,7 @@ TEST_F(NDAMpi, ScatterOtherLayouts) {
   auto A2_scatter   = mpi::scatter(nda::permuted_indices_view<nda::encode(inv_perm)>(A2), comm);
   auto A2_scatter_v = nda::permuted_indices_view<nda::encode(perm)>(A2_scatter);
   auto rg           = itertools::chunk_range(0, A2.shape()[1], comm.size(), comm.rank());
-  auto exp_shape    = std::array<long, 3>{shape_3d[0], rg.second - rg.first, shape_3d[2]};
+  auto exp_shape    = std::array{shape_3d[0], rg.second - rg.first, shape_3d[2]};
   EXPECT_EQ(exp_shape, A2_scatter_v.shape());
   EXPECT_ARRAY_EQ(A2(nda::range::all, nda::range(rg.first, rg.second), nda::range::all), A2_scatter_v);
 }
@@ -306,17 +306,17 @@ TEST_F(NDAMpi, ScatterOtherLayouts) {
 TEST_F(NDAMpi, LazyScatter) {
   // lazy-scatter a C-layout array
   decltype(A) A_scatter1 = nda::lazy_mpi_scatter(A, comm);
-  auto rg1               = itertools::chunk_range(0, A.shape()[0], comm.size(), comm.rank());
-  auto exp_shape1        = std::array<long, 3>{rg1.second - rg1.first, shape_3d[1], shape_3d[2]};
+  auto [beg1, end1]      = itertools::chunk_range(0, A.shape()[0], comm.size(), comm.rank());
+  auto exp_shape1        = std::array{end1 - beg1, shape_3d[1], shape_3d[2]};
   EXPECT_EQ(exp_shape1, A_scatter1.shape());
-  EXPECT_ARRAY_EQ(A(nda::range(rg1.first, rg1.second), nda::ellipsis{}), A_scatter1);
+  EXPECT_ARRAY_EQ(A(nda::range(beg1, end1), nda::ellipsis{}), A_scatter1);
 
   // scatter a C-layout array view
-  auto A_scatter2 = nda::array<long, 2>(nda::lazy_mpi_scatter(A(0, nda::ellipsis{}), comm));
-  auto rg2        = itertools::chunk_range(0, A.shape()[1], comm.size(), comm.rank());
-  auto exp_shape2 = std::array<long, 2>{rg2.second - rg2.first, shape_3d[2]};
+  auto A_scatter2   = nda::array<long, 2>(nda::lazy_mpi_scatter(A(0, nda::ellipsis{}), comm));
+  auto [beg2, end2] = itertools::chunk_range(0, A.shape()[1], comm.size(), comm.rank());
+  auto exp_shape2   = std::array{end2 - beg2, shape_3d[2]};
   EXPECT_EQ(exp_shape2, A_scatter2.shape());
-  EXPECT_ARRAY_EQ(A(0, nda::range(rg2.first, rg2.second), nda::ellipsis{}), A_scatter2);
+  EXPECT_ARRAY_EQ(A(0, nda::range(beg2, end2), nda::ellipsis{}), A_scatter2);
 }
 
 TEST_F(NDAMpi, ReduceCLayout) {
