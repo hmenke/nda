@@ -63,6 +63,13 @@ namespace nda {
   using heap = heap_basic<mem::mallocator<AdrSp>>;
 
   /**
+   * @brief Alias template of the nda::heap_basic policy using an nda::mem::mallocator_aligned.
+   * @tparam AdrSp nda::mem::AddressSpace in which the memory is allocated.
+   */
+  template <mem::AddressSpace AdrSp = mem::Host>
+  using heap_aligned = heap_basic<mem::mallocator_aligned<AdrSp>>;
+
+  /**
    * @brief Memory policy using an nda::mem::handle_sso.
    * @tparam Size Max. size of the data to store on the stack (number of elements).
    */

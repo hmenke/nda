@@ -24,6 +24,7 @@
 #pragma once
 
 #include "./address_space.hpp"
+#include "./aligned_alloc.hpp"
 #include "./malloc.hpp"
 #include "./memset.hpp"
 #include "../macros.hpp"
@@ -57,7 +58,7 @@ namespace nda::mem {
   /// Memory block consisting of a pointer and its size.
   struct blk_t {
     /// Pointer to the memory block.
-    char *ptr = nullptr;
+    char *  __restrict ptr = nullptr;
 
     /// Size of the memory block in bytes.
     size_t s = 0;
@@ -121,6 +122,62 @@ namespace nda::mem {
      * @param b nda::mem::blk_t memory block to deallocate.
      */
     static void deallocate(blk_t b) noexcept { free<AdrSp>((void *)b.ptr); }
+  };
+
+  /**
+   * @brief Custom allocator that uses nda::mem::aligned_alloc to allocate memory.
+   * @tparam AdrSp nda::mem::AddressSpace in which the memory is allocated.
+   */
+  template <AddressSpace AdrSp = Host>
+  class mallocator_aligned {
+    public:
+    /// Default constructor.
+    mallocator_aligned() = default;
+
+    /// Deleted copy constructor.
+    mallocator_aligned(mallocator_aligned const &) = delete;
+
+    /// Default move constructor.
+    mallocator_aligned(mallocator_aligned &&) = default;
+
+    /// Deleted copy assignment operator.
+    mallocator_aligned &operator=(mallocator_aligned const &) = delete;
+
+    /// Default move assignment operator.
+    mallocator_aligned &operator=(mallocator_aligned &&) = default;
+
+    /// nda::mem::AddressSpace in which the memory is allocated.
+    static constexpr auto address_space = AdrSp;
+
+    /**
+     * @brief Allocate memory using nda::mem::malloc.
+     *
+     * @param s Size in bytes of the memory to allocate.
+     * @return nda::mem::blk_t memory block.
+     */
+    static blk_t allocate(size_t alignment, size_t s) noexcept { return {(char *)aligned_alloc<AdrSp>(alignment, s), s}; }
+
+    /**
+     * @brief Allocate memory and set it to zero.
+     *
+     * @details The behavior depends on the address space:
+     * - It uses std::calloc for `Host` nda::mem::AddressSpace.
+     * - Otherwise it uses nda::mem::malloc and nda::mem::memset.
+     *
+     * @param s Size in bytes of the memory to allocate.
+     * @return nda::mem::blk_t memory block.
+     */
+    static blk_t allocate_zero(size_t alignment, size_t s) noexcept {
+      auto blk = allocate(alignment, s);
+      memset<AdrSp>(blk.ptr, 0, blk.s);
+      return blk;
+    }
+
+    /**
+     * @brief Deallocate memory using nda::mem::aligned_free.
+     * @param b nda::mem::blk_t memory block to deallocate.
+     */
+    static void deallocate(blk_t b) noexcept { aligned_free<AdrSp>((void *)b.ptr); }
   };
 
   /**
