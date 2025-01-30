@@ -136,6 +136,17 @@ namespace nda {
   template <typename T, template <typename...> class TMPLT>
   concept InstantiationOf = nda::is_instantiation_of_v<TMPLT, T>;
 
+  /**
+   * @brief True iif T is same_as any of the Us
+   *
+   * @details See nda::is_any_of for implementation.
+   *
+   * @tparam T Type to check
+   * @tparam Us Types to check against
+   */
+  template <typename T, typename... Us>
+  concept AnyOf = is_any_of<T, Us...>;
+
   /** @} */
 
   namespace mem {
