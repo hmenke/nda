@@ -92,9 +92,9 @@ external_dependency(h5
 
 # -- MPI --
 external_dependency(mpi
-  GIT_REPO https://github.com/hmenke/mpi
-  VERSION 1.2
-  GIT_TAG shm
+  GIT_REPO https://github.com/Mobellaaj/mpi
+  VERSION 1.3
+  GIT_TAG bog-shm
 )
 
 ## Pybind 11
