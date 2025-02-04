@@ -143,6 +143,41 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND DEFINED ENV{LIBRARY_PATH})
   endforeach()
 endif()
 
+# Detect supported instruction set features like SSE and AVX.
+# The result is stored in the list CXX_COMPILER_SUPPORTED_ISA.
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
+  execute_process(
+    COMMAND "${CMAKE_CXX_COMPILER}" "-E" "-" "-march=native" "-###"
+    ERROR_VARIABLE clang_isa_opts)
+  # Output looks like ... "-target-feature" "-egpr" "-target-feature" "+sse4.1" ...
+  # Filter out stuff that looks like "+<feature>"
+  string(REGEX MATCHALL [["\+[^"]*"]] clang_isa_list "${clang_isa_opts}")
+  # Remove + and "
+  list(TRANSFORM clang_isa_list REPLACE [["\+([^"]*)"]] [[\1]])
+  # Filter out only relevant entries
+  list(FILTER clang_isa_list INCLUDE REGEX [[(sse|avx|fma).*]])
+  set(CXX_COMPILER_SUPPORTED_ISA "${clang_isa_list}")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  execute_process(
+    COMMAND "${CMAKE_CXX_COMPILER}" "-Q" "-march=native" "--help=target"
+    OUTPUT_VARIABLE gcc_isa_opts)
+  # Output looks like
+  # ...
+  #  -msoft-float                		[disabled]
+  #  -msse                       		[enabled]
+  # ...
+  # Filter out stuff that looks like -m<feature> [enabled]
+  string(REGEX MATCHALL "\\-m[^[\n]*\\[enabled\\]\n" gcc_isa_list "${gcc_isa_opts}")
+  # Remove -m, spaces and [enabled]
+  list(TRANSFORM gcc_isa_list REPLACE [[-m([^ ]*).*]] [[\1]])
+  # Filter out only relevant entries
+  list(FILTER gcc_isa_list INCLUDE REGEX [[(sse|avx|fma).*]])
+  set(CXX_COMPILER_SUPPORTED_ISA "${gcc_isa_list}")
+else()
+  message(WARNING "Cannot determine supported instruction set architecture for ${CMAKE_CXX_COMPILER_ID}")
+  set(CXX_COMPILER_SUPPORTED_ISA)
+endif()
+
 # Provide GNU Installation directories
 include(GNUInstallDirs)
 
