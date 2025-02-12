@@ -1248,6 +1248,12 @@ namespace nda::mem {
      * @return Number of elements of type `T` in the handled memory.
      */
     [[nodiscard]] long size() const noexcept { return _size; }
+
+    /**
+     * @brief Get a pointer to the stored userdata.
+     * @return Pointer to the userdata specific to the allocator.
+     */
+    [[nodiscard]] void *userdata() const noexcept { return _userdata; }
   };
 
   /** @} */
