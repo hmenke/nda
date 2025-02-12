@@ -6,3 +6,5 @@ doc/html
 .*.swp
 .*.swo
 .*.swn
+_build/
+build/
