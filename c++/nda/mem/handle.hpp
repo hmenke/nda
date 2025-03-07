@@ -99,12 +99,12 @@ namespace nda::mem {
   struct handle_heap {
     static_assert(std::is_nothrow_destructible_v<T>, "nda::mem::handle_heap requires the value_type to have a non-throwing destructor");
 
-    private:
-    // Pointer to the start of the actual data.
-    T *_data = nullptr;
+    /// Type of allocated block.
+    using blk_t = typename A::blk_t;
 
-    // Size of the data (number of T elements). Invariant: size > 0 iif data != nullptr.
-    size_t _size = 0;
+    private:
+    /// Allocated block.
+    blk_t _blk{};
 
     // Allocator to use.
 #ifndef NDA_DEBUG_LEAK_CHECK
@@ -116,12 +116,10 @@ namespace nda::mem {
     // For shared ownership (points to a blk_T_t).
     mutable std::shared_ptr<void> sptr;
 
-    // Type of the memory block, i.e. a pointer to the data and its size.
-    using blk_T_t = std::pair<T *, size_t>;
-
     // Release the handled memory (data pointer and size are not set to null here).
-    static void destruct(blk_T_t b) noexcept {
-      auto [data, size] = b;
+    static void destruct(blk_t b) noexcept {
+      T *data = (T *)b.ptr;
+      size_t size = b.s;
 
       // do nothing if the data is null
       if (data == nullptr) return;
@@ -132,11 +130,11 @@ namespace nda::mem {
       }
 
       // deallocate the memory block
-      allocator.deallocate({(char *)data, size * sizeof(T)});
+      allocator.deallocate(b);
     }
 
     // Deleter for the shared pointer.
-    static void deleter(void *p) noexcept { destruct(*((blk_T_t *)p)); }
+    static void deleter(void *p) noexcept { destruct(*((blk_t *)p)); }
 
     public:
     /// Value type of the data.
@@ -153,7 +151,7 @@ namespace nda::mem {
      * @return A copy of the shared pointer stored in the current handle.
      */
     std::shared_ptr<void> get_sptr() const {
-      if (not sptr) sptr.reset(new blk_T_t{_data, _size}, deleter);
+      if (not sptr) sptr.reset(new blk_t{_blk}, deleter);
       return sptr;
     }
 
@@ -163,7 +161,7 @@ namespace nda::mem {
      * non-trivial objects and deallocates the memory.
      */
     ~handle_heap() noexcept {
-      if (not sptr and not(is_null())) destruct({_data, _size});
+      if (not sptr and not(is_null())) destruct(_blk);
     }
 
     /// Default constructor leaves the handle in a null state (`nullptr` and size 0).
@@ -173,10 +171,7 @@ namespace nda::mem {
      * @brief Move constructor simply copies the pointers and size and resets the source handle to a null state.
      * @param h Source handle.
      */
-    handle_heap(handle_heap &&h) noexcept : _data(h._data), _size(h._size), sptr(std::move(h.sptr)) {
-      h._data = nullptr;
-      h._size = 0;
-    }
+    handle_heap(handle_heap &&h) noexcept : _blk(std::exchange(h._blk, blk_t{})), sptr(std::move(h.sptr)) {}
 
     /**
      * @brief Move assignment operator first releases the resources held by the current handle and then moves the
@@ -186,16 +181,14 @@ namespace nda::mem {
      */
     handle_heap &operator=(handle_heap &&h) noexcept {
       // release current resources if they are not shared and not null
-      if (not sptr and not(is_null())) destruct({_data, _size});
+      if (not sptr and not(is_null())) destruct(_blk);
 
       // move the resources from the source handle
-      _data = h._data;
-      _size = h._size;
-      sptr  = std::move(h.sptr);
+      _blk = h._blk;
+      sptr = std::move(h.sptr);
 
       // reset the source handle to a null state
-      h._data = nullptr;
-      h._size = 0;
+      h._blk = blk_t{};
       return *this;
     }
 
@@ -206,9 +199,9 @@ namespace nda::mem {
     explicit handle_heap(handle_heap const &h) : handle_heap(h.size(), do_not_initialize) {
       if (is_null()) return;
       if constexpr (std::is_trivially_copyable_v<T>) {
-        memcpy<address_space, address_space>(_data, h.data(), h.size() * sizeof(T));
+        memcpy<address_space, address_space>(_blk.ptr, h.data(), h.size() * sizeof(T));
       } else {
-        for (size_t i = 0; i < _size; ++i) new (_data + i) T(h[i]);
+        for (size_t i = 0; i < _blk.s; ++i) new (_blk.ptr + i) T(h[i]);
       }
     }
 
@@ -233,11 +226,11 @@ namespace nda::mem {
     explicit handle_heap(H const &h) : handle_heap(h.size(), do_not_initialize) {
       if (is_null()) return;
       if constexpr (std::is_trivially_copyable_v<T>) {
-        memcpy<address_space, H::address_space>((void *)_data, (void *)h.data(), _size * sizeof(T));
+        memcpy<address_space, H::address_space>((void *)_blk.ptr, (void *)h.data(), _blk.s * sizeof(T));
       } else {
         static_assert(address_space == H::address_space,
                       "Constructing an nda::mem::handle_heap from a handle of a different address space requires a trivially copyable value_type");
-        for (size_t i = 0; i < _size; ++i) new (_data + i) T(h[i]);
+        for (size_t i = 0; i < _blk.s; ++i) new (_blk.ptr + i) T(h[i]);
       }
     }
 
@@ -262,8 +255,7 @@ namespace nda::mem {
       if (size == 0) return;
       auto b = allocator.allocate(size * sizeof(T));
       if (not b.ptr) throw std::bad_alloc{};
-      _data = (T *)b.ptr;
-      _size = size;
+      _blk = b;
     }
 
     /**
@@ -274,8 +266,7 @@ namespace nda::mem {
       if (size == 0) return;
       auto b = allocator.allocate_zero(size * sizeof(T));
       if (not b.ptr) throw std::bad_alloc{};
-      _data = (T *)b.ptr;
-      _size = size;
+      _blk = b;
     }
 
     /**
@@ -297,12 +288,11 @@ namespace nda::mem {
       else
         b = allocator.allocate(size * sizeof(T));
       if (not b.ptr) throw std::bad_alloc{};
-      _data = (T *)b.ptr;
-      _size = size;
+      _blk = b;
 
       // call placement new for non trivial and non complex types
       if constexpr (!std::is_trivial_v<T> and !is_complex_v<T>) {
-        for (size_t i = 0; i < size; ++i) new (_data + i) T();
+        for (size_t i = 0; i < size; ++i) new (_blk.ptr + i) T();
       }
     }
 
@@ -312,7 +302,7 @@ namespace nda::mem {
      * @param i Index of the element to access.
      * @return Reference to the element at the given index.
      */
-    [[nodiscard]] T &operator[](long i) noexcept { return _data[i]; }
+    [[nodiscard]] T &operator[](long i) noexcept { return ((T *)_blk.ptr)[i]; }
 
     /**
      * @brief Subscript operator to access the data.
@@ -320,7 +310,7 @@ namespace nda::mem {
      * @param i Index of the element to access.
      * @return Const reference to the element at the given index.
      */
-    [[nodiscard]] T const &operator[](long i) const noexcept { return _data[i]; }
+    [[nodiscard]] T const &operator[](long i) const noexcept { return ((T *)_blk.ptr)[i]; }
 
     /**
      * @brief Check if the handle is in a null state.
@@ -329,22 +319,30 @@ namespace nda::mem {
     [[nodiscard]] bool is_null() const noexcept {
 #ifdef NDA_DEBUG
       // check the invariants in debug mode
-      EXPECTS((_data == nullptr) == (_size == 0));
+      EXPECTS((_blk.ptr == nullptr) == (_blk.s == 0));
 #endif
-      return _data == nullptr;
+      return _blk.ptr == nullptr;
     }
 
     /**
      * @brief Get a pointer to the stored data.
      * @return Pointer to the start of the handled memory.
      */
-    [[nodiscard]] T *data() const noexcept { return _data; }
+    [[nodiscard]] T *data() const noexcept { return ((T *)_blk.ptr); }
 
     /**
      * @brief Get the size of the handle.
      * @return Number of elements of type `T` in the handled memory.
      */
-    [[nodiscard]] long size() const noexcept { return _size; }
+    [[nodiscard]] long size() const noexcept { return _blk.s; }
+
+    /**
+     * @brief Get the pointer to the userdata.
+     * @return Pointer to the userdata.
+     */
+    template <typename U>
+    requires requires { _blk.userdata; }
+    [[nodiscard]] U userdata() const noexcept { return static_cast<U>(_blk.userdata); }
   };
 
   /**
@@ -360,9 +358,12 @@ namespace nda::mem {
     static_assert(std::is_copy_constructible_v<T>, "nda::mem::handle_stack requires the value_type to be copy constructible");
     static_assert(std::is_nothrow_destructible_v<T>, "nda::mem::handle_stack requires the value_type to have a non-throwing destructor");
 
+    /// Type of the allocated block.
+    using blk_t = std::array<char, sizeof(T) * Size>;
+
     private:
     // Memory buffer on the stack to store the data.
-    std::array<char, sizeof(T) * Size> buffer;
+    blk_t buffer;
 
     public:
     /// Value type of the data.
@@ -522,6 +523,9 @@ namespace nda::mem {
 
     /// nda::mem::AddressSpace in which the memory is allocated.
     static constexpr auto address_space = Host;
+
+    /// Type of allocated block.
+    using blk_t = typename mallocator<>::blk_t;
 
     /// Default constructor.
     handle_sso(){}; // NOLINT (user-defined constructor to avoid value initialization of the buffer)
@@ -754,15 +758,12 @@ namespace nda::mem {
   struct handle_shared {
     static_assert(std::is_nothrow_destructible_v<T>, "nda::mem::handle_shared requires the value_type to have a non-throwing destructor");
 
+    // Type of allocated block.
+    using blk_t = blk_slim_t;
+
     private:
-    // Pointer to the start of the actual data.
-    T *_data = nullptr;
-
-    // Size of the data (number of T elements). Invariant: size > 0 iif data != 0.
-    size_t _size = 0;
-
-    // Type of the memory block, i.e. a pointer to the data and its size.
-    using blk_t = std::pair<T *, size_t>;
+    // Block of the actual data.
+    blk_t _blk{};
 
     // For shared ownership (points to a blk_T_t).
     std::shared_ptr<void> sptr;
@@ -786,7 +787,7 @@ namespace nda::mem {
      * @param foreign_decref Function to decrease the reference count of the shared object.
      */
     handle_shared(T *data, size_t size, void *foreign_handle, void (*foreign_decref)(void *)) noexcept
-       : _data(data), _size(size), sptr{foreign_handle, foreign_decref} {}
+      : _blk{(char *)data, size}, sptr{foreign_handle, foreign_decref} {}
 
     /**
      * @brief Construct a shared handle from an nda::mem::handle_heap.
@@ -797,7 +798,7 @@ namespace nda::mem {
     template <Allocator A>
     handle_shared(handle_heap<T, A> const &h) noexcept
       requires(A::address_space == address_space)
-       : _data(h.data()), _size(h.size()) {
+        : _blk{(char *)h.data(), (size_t)h.size()} {
       if (not h.is_null()) sptr = h.get_sptr();
     }
 
@@ -807,7 +808,7 @@ namespace nda::mem {
      * @param i Index of the element to access.
      * @return Reference to the element at the given index.
      */
-    [[nodiscard]] T &operator[](long i) noexcept { return _data[i]; }
+    [[nodiscard]] T &operator[](long i) noexcept { return ((T *)_blk.ptr)[i]; }
 
     /**
      * @brief Subscript operator to access the data.
@@ -815,7 +816,7 @@ namespace nda::mem {
      * @param i Index of the element to access.
      * @return Const reference to the element at the given index.
      */
-    [[nodiscard]] T const &operator[](long i) const noexcept { return _data[i]; }
+    [[nodiscard]] T const &operator[](long i) const noexcept { return ((T *)_blk.ptr)[i]; }
 
     /**
      * @brief Check if the handle is in a null state.
@@ -824,9 +825,9 @@ namespace nda::mem {
     [[nodiscard]] bool is_null() const noexcept {
 #ifdef NDA_DEBUG
       // Check the Invariants in Debug Mode
-      EXPECTS((_data == nullptr) == (_size == 0));
+      EXPECTS((_blk.ptr == nullptr) == (_blk.s == 0));
 #endif
-      return _data == nullptr;
+      return _blk.ptr == nullptr;
     }
 
     /**
@@ -839,14 +840,15 @@ namespace nda::mem {
      * @brief Get a pointer to the stored data.
      * @return Pointer to the start of the handled memory.
      */
-    [[nodiscard]] T *data() const noexcept { return _data; }
+    [[nodiscard]] T *data() const noexcept { return (T *)_blk.ptr; }
 
     /**
      * @brief Get the size of the handle.
      * @return Number of elements of type `T` in the handled memory.
      */
-    [[nodiscard]] long size() const noexcept { return _size; }
+    [[nodiscard]] long size() const noexcept { return _blk.s; }
   };
+
 
   /**
    * @brief A non-owning handle for a memory block on the heap.
@@ -854,14 +856,16 @@ namespace nda::mem {
    * @tparam T Value type of the data.
    * @tparam AdrSp nda::mem::AddressSpace in which the memory is allocated.
    */
-  template <typename T, AddressSpace AdrSp = Host>
+  template <typename T, AddressSpace AdrSp = Host, mem::Allocator A = mem::mallocator<AdrSp>>
   struct handle_borrowed {
     private:
     // Value type of the data with const removed.
     using T0 = std::remove_const_t<T>;
 
+    using handle_t = handle_heap<T0, A>;
+
     // Parent handle (required for regular -> shared promotion in Python Converter).
-    handle_heap<T0> const *_parent = nullptr;
+    handle_t const *_parent = nullptr;
 
     // Pointer to the start of the actual data.
     T *_data = nullptr;
@@ -869,6 +873,9 @@ namespace nda::mem {
     public:
     /// Value type of the data.
     using value_type = T;
+
+    /// Type of the borrowed block.
+    using blk_t = typename handle_heap<T0, A>::blk_t;
 
     /// nda::mem::AddressSpace in which the memory is allocated.
     static constexpr auto address_space = AdrSp;
@@ -902,7 +909,7 @@ namespace nda::mem {
       requires(address_space == H::address_space and (std::is_const_v<value_type> or !std::is_const_v<typename H::value_type>)
                and std::is_same_v<const value_type, const typename H::value_type>)
     handle_borrowed(H const &h, long offset = 0) noexcept : _data(h.data() + offset) {
-      if constexpr (std::is_same_v<H, handle_heap<T0>>) _parent = &h;
+      if constexpr (std::is_same_v<H, handle_t>) _parent = &h;
     }
 
     /**
@@ -931,7 +938,7 @@ namespace nda::mem {
      * @brief Get a pointer to the parent handle.
      * @return Pointer to the parent handle.
      */
-    [[nodiscard]] handle_heap<T0> const *parent() const { return _parent; }
+    [[nodiscard]] handle_t const *parent() const { return _parent; }
 
     /**
      * @brief Get a pointer to the stored data.
@@ -940,266 +947,49 @@ namespace nda::mem {
     [[nodiscard]] T *data() const noexcept { return _data; }
   };
 
-  template <typename T, MPISharedMemoryAllocator A = mpi_shm_allocator>
-  struct handle_mpi_shm {
-    static_assert(std::is_nothrow_destructible_v<T>, "nda::mem::handle_mpi_shm requires the value_type to have a non-throwing destructor");
-
+  template <typename T>
+  struct handle_borrowed<T, MPISharedMemory, mem::mpi_shm_allocator> {
     private:
-    // Pointer to the start of the actual data.
-    T *_data = nullptr;
 
-    // Size of the data (number of T elements). Invariant: size > 0 iif data != nullptr.
-    size_t _size = 0;
+    using T0 = std::remove_const_t<T>;
+    using handle_t = handle_heap<T0, mem::mpi_shm_allocator>;
 
-    // Special userdata used by the allocator.
-    void *_userdata = nullptr;
-
-    // Allocator to use.
-#ifndef NDA_DEBUG_LEAK_CHECK
-    static inline A allocator; // NOLINT (allocator is not specific to a single instance)
-#else
-    static inline leak_check<A> allocator; // NOLINT (allocator is not specific to a single instance)
-#endif
-
-    // For shared ownership (points to a blk_T_t).
-    mutable std::shared_ptr<void> sptr;
-
-    // Type of the memory block, i.e. a pointer to the data and its size.
-    using blk_T_t = std::tuple<T *, size_t, void *>;
-
-    // Release the handled memory (data pointer and size are not set to null here).
-    static void destruct(blk_T_t b) noexcept {
-      auto [data, size, win] = b;
-
-      // do nothing if the data is null
-      if (data == nullptr) return;
-
-      // if needed, call the destructors of the objects stored
-      if constexpr (A::address_space == Host and !(std::is_trivial_v<T> or nda::is_complex_v<T>)) {
-        for (size_t i = 0; i < size; ++i) data[i].~T();
-      }
-
-      // deallocate the memory block
-      allocator.deallocate({(char *)data, size * sizeof(T), win});
-    }
-
-    // Deleter for the shared pointer.
-    static void deleter(void *p) noexcept { destruct(*((blk_T_t *)p)); }
+    handle_t const * _parent = nullptr;
+    T* _data = nullptr;
 
     public:
-    /// Value type of the data.
+
     using value_type = T;
 
-    /// nda::mem::Allocator type.
-    using allocator_type = A;
+    handle_borrowed() = default;
+    handle_borrowed(handle_borrowed const&) = default;
+    handle_borrowed(handle_borrowed&&) = default;
+    handle_borrowed& operator=(handle_borrowed const&) = default;
+    handle_borrowed& operator=(handle_borrowed&&) = default;
 
-    /// nda::mem::AddressSpace in which the memory is allocated.
-    static constexpr auto address_space = allocator_type::address_space;
-
-    /**
-     * @brief Get a shared pointer to the memory block.
-     * @return A copy of the shared pointer stored in the current handle.
-     */
-    std::shared_ptr<void> get_sptr() const {
-        if (not sptr) sptr.reset(new blk_T_t{_data, _size, _userdata}, deleter);
-      return sptr;
+    template<Handle H>
+      requires (H::address_space == MPISharedMemory
+                and (std::is_const_v<value_type> or !std::is_const_v<typename H::value_type>)
+                and std::is_same_v<const value_type, const typename H::value_type>
+                and std::is_same_v<typename H::allocator_type, mem::mpi_shm_allocator>)
+    handle_borrowed(H const &h, long offset = 0) : _data(h.data() + offset) {
+      if constexpr (std::is_same_v<H, handle_t>)
+        _parent = &h;
     }
 
-    /**
-     * @brief Destructor for the handle.
-     * @details If the shared pointer is set, it does nothing. Otherwise, it explicitly calls the destructor of
-     * non-trivial objects and deallocates the memory.
-     */
-    ~handle_mpi_shm() noexcept {
-        if (not sptr and not(is_null())) destruct({_data, _size, _userdata});
-    }
+    [[nodiscard]] handle_t const *parent() const { return _parent; }
 
-    /// Default constructor leaves the handle in a null state (`nullptr` and size 0).
-    handle_mpi_shm() = default;
-
-    /**
-     * @brief Move constructor simply copies the pointers and size and resets the source handle to a null state.
-     * @param h Source handle.
-     */
-    handle_mpi_shm(handle_mpi_shm &&h) noexcept : _data(h._data), _size(h._size), _userdata(h._userdata), sptr(std::move(h.sptr)) {
-      h._data = nullptr;
-      h._size = 0;
-      h._userdata = nullptr;
-    }
-
-    /**
-     * @brief Move assignment operator first releases the resources held by the current handle and then moves the
-     * resources from the source to the current handle.
-     *
-     * @param h Source handle.
-     */
-    handle_mpi_shm &operator=(handle_mpi_shm &&h) noexcept {
-      // release current resources if they are not shared and not null
-      if (not sptr and not(is_null())) destruct({_data, _size, _userdata});
-
-      // move the resources from the source handle
-      _data = h._data;
-      _size = h._size;
-      _userdata = h._userdata;
-      sptr  = std::move(h.sptr);
-
-      // reset the source handle to a null state
-      h._data = nullptr;
-      h._size = 0;
-      h._userdata = nullptr;
-      return *this;
-    }
-
-    /**
-     * @brief Copy constructor makes a deep copy of the data from another handle.
-     * @param h Source handle.
-     */
-    explicit handle_mpi_shm(handle_mpi_shm const &h) : handle_mpi_shm(h.size(), do_not_initialize) {
-      if (is_null()) return;
-      if constexpr (std::is_trivially_copyable_v<T>) {
-        memcpy<address_space, address_space>(_data, h.data(), h.size() * sizeof(T));
-      } else {
-        for (size_t i = 0; i < _size; ++i) new (_data + i) T(h[i]);
-      }
-    }
-
-    /**
-     * @brief Copy assignment operator utilizes the copy constructor and move assignment operator to make a deep copy of
-     * the data and size from the source handle.
-     *
-     * @param h Source handle.
-     */
-    handle_mpi_shm &operator=(handle_mpi_shm const &h) {
-      *this = handle_mpi_shm{h};
-      return *this;
-    }
-
-    /**
-     * @brief Construct a handle by making a deep copy of the data from another handle.
-     *
-     * @tparam H nda::mem::OwningHandle type.
-     * @param h Source handle.
-    template <OwningHandle<value_type> H>
-    explicit handle_mpi_shm(H const &h) : handle_mpi_shm(h.size(), do_not_initialize) {
-      if (is_null()) return;
-      if constexpr (std::is_trivially_copyable_v<T>) {
-        memcpy<address_space, H::address_space>((void *)_data, (void *)h.data(), _size * sizeof(T));
-      } else {
-        static_assert(address_space == H::address_space,
-                      "Constructing an nda::mem::handle_mpi_shm from a handle of a different address space requires a trivially copyable value_type");
-        for (size_t i = 0; i < _size; ++i) new (_data + i) T(h[i]);
-      }
-    }
-     */
-
-
-    /**
-     * @brief Assignment operator utilizes another constructor and move assignment to make a deep copy of the data and
-     * size from the source handle.
-     *
-     * @tparam AS Allocator type of the source handle.
-     * @param h Source handle with a different allocator.
-    template <Allocator AS>
-    handle_mpi_shm &operator=(handle_mpi_shm<T, AS> const &h) {
-      *this = handle_mpi_shm{h};
-      return *this;
-    }
-     */
-
-    /**
-     * @brief Construct a handle by allocating memory for the data of a given size but without initializing it.
-     * @param size Size of the data (number of elements).
-     */
-    handle_mpi_shm(long size, do_not_initialize_t) {
-      if (size == 0) return;
-      auto b = allocator.allocate(size * sizeof(T));
-      if (not b.ptr) throw std::bad_alloc{};
-      _data = (T *)b.ptr;
-      _size = size;
-      _userdata = b.userdata;
-    }
-
-    /**
-     * @brief Construct a handle by allocating memory for the data of a given size and initializing it to zero.
-     * @param size Size of the data (number of elements).
-     */
-    handle_mpi_shm(long size, init_zero_t) {
-      if (size == 0) return;
-      auto b = allocator.allocate_zero(size * sizeof(T));
-      if (not b.ptr) throw std::bad_alloc{};
-      _data = (T *)b.ptr;
-      _size = size;
-      _userdata = b.userdata;
-    }
-
-    /**
-     * @brief Construct a handle by allocating memory for the data of a given size and initializing it depending on the
-     * value type.
-     *
-     * @details The data is initialized as follows:
-     * - If `T` is std::complex and nda::mem::init_dcmplx is true, the data is initialized to zero.
-     * - If `T` is not trivial and not complex, the data is default constructed by placement new operator calls.
-     * - Otherwise, the data is not initialized.
-     *
-     * @param size Size of the data (number of elements).
-     */
-    handle_mpi_shm(long size) {
-      if (size == 0) return;
-      blk_shm_t b;
-      if constexpr (is_complex_v<T> && init_dcmplx)
-        b = allocator.allocate_zero(size * sizeof(T));
-      else
-        b = allocator.allocate(size * sizeof(T));
-      if (not b.ptr) throw std::bad_alloc{};
-      _data = (T *)b.ptr;
-      _size = size;
-      _userdata = b.userdata;
-
-      // call placement new for non trivial and non complex types
-      if constexpr (!std::is_trivial_v<T> and !is_complex_v<T>) {
-        for (size_t i = 0; i < size; ++i) new (_data + i) T();
-      }
-    }
-
-    /**
-     * @brief Subscript operator to access the data.
-     *
-     * @param i Index of the element to access.
-     * @return Reference to the element at the given index.
-     */
-    [[nodiscard]] T &operator[](long i) noexcept { return _data[i]; }
-
-    /**
-     * @brief Subscript operator to access the data.
-     *
-     * @param i Index of the element to access.
-     * @return Const reference to the element at the given index.
-     */
-    [[nodiscard]] T const &operator[](long i) const noexcept { return _data[i]; }
-
-    /**
-     * @brief Check if the handle is in a null state.
-     * @return True if the data is a `nullptr` (and the size is 0).
-     */
-    [[nodiscard]] bool is_null() const noexcept {
-#ifdef NDA_DEBUG
-      // check the invariants in debug mode
-      EXPECTS((_data == nullptr) == (_size == 0));
-#endif
-      return _data == nullptr;
-    }
-
-    /**
-     * @brief Get a pointer to the stored data.
-     * @return Pointer to the start of the handled memory.
-     */
     [[nodiscard]] T *data() const noexcept { return _data; }
 
-    /**
-     * @brief Get the size of the handle.
-     * @return Number of elements of type `T` in the handled memory.
-     */
-    [[nodiscard]] long size() const noexcept { return _size; }
+    template <typename U>
+    [[nodiscard]] U userdata() const noexcept {
+      if (_parent) {
+        return _parent->template userdata<U>();
+      }
+      // avoid warnings
+      return static_cast<U>(nullptr);
+    }
+
   };
 
   /** @} */

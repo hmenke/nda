@@ -104,28 +104,14 @@ namespace nda {
    * @brief Memory policy using an nda::mem::handle_borrowed.
    * @tparam AdrSp nda::mem::AddressSpace in which the memory is allocated.
    */
-  template <mem::AddressSpace AdrSp = mem::Host>
+  template <mem::AddressSpace AdrSp = mem::Host, mem::Allocator A = mem::mallocator<AdrSp>>
   struct borrowed {
     /**
      * @brief Handle type for the policy.
      * @tparam T Value type of the data.
      */
     template <typename T>
-    using handle = mem::handle_borrowed<T, AdrSp>;
-  };
-
-  /**
-   * @brief Memory policy using an nda::mem::handle_heap.
-   * @tparam Allocator Allocator type to be used.
-   */
-  template <typename MPISharedMemoryAllocator>
-  struct mpi_shared_memory {
-    /**
-     * @brief Handle type for the policy.
-     * @tparam T Value type of the data.
-     */
-    template <typename T>
-    using handle = mem::handle_mpi_shm<T, MPISharedMemoryAllocator>;
+    using handle = mem::handle_borrowed<T, AdrSp, A>;
   };
 
   /** @} */
