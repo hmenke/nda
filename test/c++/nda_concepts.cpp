@@ -97,9 +97,6 @@ TEST(NDA, DefaultAllocator) {
 }
 
 TEST(NDA, CustomAllocator) {
-  mpi::communicator world;
-  mpi::shared_communicator shm = world.split_shared();
-  nda::mem::mpi_shm_allocator::init(shm);
   nda::mem::handle_heap<int, nda::mem::mpi_shm_allocator> h(10);
 
   nda::mem::handle_borrowed<int, nda::mem::AddressSpace::MPISharedMemory, nda::mem::mallocator<>> hb(h);
@@ -126,9 +123,6 @@ TEST(NDA, BorrowWithOffset) {
 }
 
 TEST(NDA, CustomAllocatorMatching) {
-  mpi::communicator world;
-  mpi::shared_communicator shm = world.split_shared();
-  nda::mem::mpi_shm_allocator::init(shm);
   nda::mem::handle_heap<int, nda::mem::mpi_shm_allocator> h(10);
 
   nda::mem::handle_borrowed<int, nda::mem::AddressSpace::MPISharedMemory, nda::mem::mpi_shm_allocator> hb(h);
