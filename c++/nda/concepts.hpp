@@ -160,8 +160,6 @@ namespace nda {
 
     /// @cond
     // Forward declarations.
-    struct blk_t;
-    struct blk_shm_t;
     enum class AddressSpace;
     /// @endcond
 
@@ -178,17 +176,10 @@ namespace nda {
      */
     template <typename A>
     concept Allocator = requires(A &a) {
-      { a.allocate(size_t{}) } noexcept -> std::same_as<blk_t>;
-      { a.allocate_zero(size_t{}) } noexcept -> std::same_as<blk_t>;
-      { a.deallocate(std::declval<blk_t>()) } noexcept;
-      { A::address_space } -> std::same_as<AddressSpace const &>;
-    };
-
-    template <typename A>
-    concept MPISharedMemoryAllocator = requires(A &a) {
-      { a.allocate(size_t{}, mpi::shared_communicator{}) } noexcept -> std::same_as<blk_shm_t>;
-      { a.allocate_zero(size_t{}, mpi::shared_communicator{}) } noexcept -> std::same_as<blk_shm_t>;
-      { a.deallocate(std::declval<blk_shm_t>()) } noexcept;
+      typename A::blk_t;
+      { a.allocate(size_t{}) } noexcept -> std::same_as<typename A::blk_t>;
+      { a.allocate_zero(size_t{}) } noexcept -> std::same_as<typename A::blk_t>;
+      { a.deallocate(std::declval<typename A::blk_t>()) } noexcept;
       { A::address_space } -> std::same_as<AddressSpace const &>;
     };
 
@@ -205,6 +196,7 @@ namespace nda {
     template <typename H, typename T = typename std::remove_cvref_t<H>::value_type>
     concept Handle = requires(H const &h) {
       requires std::is_same_v<typename std::remove_cvref_t<H>::value_type, T>;
+      typename H::blk_t;
       { h.is_null() } noexcept -> std::same_as<bool>;
       { h.data() } noexcept -> std::same_as<T *>;
       { H::address_space } -> std::same_as<AddressSpace const &>;

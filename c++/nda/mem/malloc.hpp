@@ -34,6 +34,43 @@ namespace nda::mem {
    */
 
   /**
+   * @class mpi_shm
+   * @brief Manages the global MPI shared communicator for shared memory allocation.
+   *
+   * This class provides a mechanism for retrieving and setting the global
+   * `mpi::shared_communicator` instance used for MPI shared memory allocation.
+   * It ensures that all components accessing shared memory use the same communicator.
+   *
+   * @note This class is not thread-safe. Concurrent modifications may lead to undefined behavior.
+   */
+  class mpi_shm { /// mpi_shm + default constructor in private
+    /**
+     * @brief Return reference to the singleton for the global MPI shared communicator instance of the MPI shared memory allocator.
+     *
+     * @warning This function is not thread-safe.
+     */
+    static mpi::shared_communicator &_impl_communicator() {
+      static mpi::shared_communicator shm = mpi::communicator{}.split_shared();
+      return shm;
+    }
+
+    public:
+    /**
+     * @brief Return the global MPI shared communicator instance of the MPI shared memory allocator.
+     *
+     * @warning This function is not thread-safe.
+     */
+    inline static mpi::shared_communicator get_communicator() { return _impl_communicator(); }
+
+    /**
+      * @brief Set the global MPI shared communicator instance of the MPI shared memory allocator.
+      *
+      * @warning This function is not thread-safe.
+      */
+    inline static void set_communicator(mpi::shared_communicator const &shm) { _impl_communicator() = shm; }
+  };
+
+  /**
    * @brief Call the correct `malloc` function based on the given address space.
    *
    * @details It makes the following function calls depending on the address space:
@@ -55,8 +92,10 @@ namespace nda::mem {
       ptr = std::malloc(size); // NOLINT (we want to return a void*)
     } else if constexpr (AdrSp == Device) {
       device_error_check(cudaMalloc((void **)&ptr, size), "cudaMalloc");
-    } else {
+    } else if constexpr (have_device_compatible_addr_space<AdrSp>) {
       device_error_check(cudaMallocManaged((void **)&ptr, size), "cudaMallocManaged");
+    } else {
+      static_assert(false, "Not implemented!");
     }
     return ptr;
   }
@@ -78,8 +117,10 @@ namespace nda::mem {
 
     if constexpr (AdrSp == Host) {
       std::free(p); // NOLINT (we want to call free with a void*)
-    } else {
+    } else if (have_device_compatible_addr_space<AdrSp>) {
       device_error_check(cudaFree(p), "cudaFree");
+    } else {
+      static_assert(false, "Not implemented!");
     }
   }
 

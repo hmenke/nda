@@ -333,7 +333,9 @@ TEST_F(NDAMpi, ReduceCLayout) {
   auto B_max = mpi::all_reduce(B(0, 0, _), comm, MPI_MAX);
   EXPECT_ARRAY_EQ(B_max, A(0, 0, _) * mpi_size);
   auto B_min = mpi::reduce(B(0, 0, _), comm, mpi_size - 1, false, MPI_MIN);
-  if (mpi_rank == mpi_size - 1) EXPECT_ARRAY_EQ(B_min, A(0, 0, _));
+  if (mpi_rank == mpi_size - 1) {
+    EXPECT_ARRAY_EQ(B_min, A(0, 0, _));
+  }
 }
 
 TEST_F(NDAMpi, ReduceCLayoutInPlace) {
@@ -356,7 +358,9 @@ TEST_F(NDAMpi, ReduceCLayoutInPlace) {
   mpi::all_reduce_in_place(B(0, 0, _), comm, MPI_MAX);
   EXPECT_ARRAY_EQ(B(0, 0, _), A(0, 0, _) * mpi_size);
   mpi::reduce_in_place(B(0, 1, _), comm, mpi_size - 1, false, MPI_MIN);
-  if (mpi_rank == mpi_size - 1) EXPECT_ARRAY_EQ(B(0, 1, _), A(0, 1, _));
+  if (mpi_rank == mpi_size - 1) {
+    EXPECT_ARRAY_EQ(B(0, 1, _), A(0, 1, _));
+  }
 }
 
 TEST_F(NDAMpi, ReduceOtherLayouts) {
@@ -373,7 +377,9 @@ TEST_F(NDAMpi, ReduceOtherLayouts) {
   auto B2_max     = mpi::all_reduce(B2(_, 0, 0), comm, MPI_MAX);
   EXPECT_ARRAY_EQ(B2_max, A2(_, 0, 0) * mpi_size);
   auto B2_min = mpi::reduce(B2(_, 0, 0), comm, mpi_size - 1, false, MPI_MIN);
-  if (mpi_rank == mpi_size - 1) EXPECT_ARRAY_EQ(B2_min, A2(_, 0, 0));
+  if (mpi_rank == mpi_size - 1) {
+    EXPECT_ARRAY_EQ(B2_min, A2(_, 0, 0));
+  }
 }
 
 TEST_F(NDAMpi, ReduceOtherLayoutsInPlace) {
@@ -396,7 +402,9 @@ TEST_F(NDAMpi, ReduceOtherLayoutsInPlace) {
   mpi::all_reduce_in_place(B2(_, 0, 0), comm, MPI_MAX);
   EXPECT_ARRAY_EQ(B2(_, 0, 0), A2(_, 0, 0) * mpi_size);
   mpi::reduce_in_place(B2(_, 0, 1), comm, mpi_size - 1, false, MPI_MIN);
-  if (mpi_rank == mpi_size - 1) EXPECT_ARRAY_EQ(B2(_, 0, 1), A2(_, 0, 1));
+  if (mpi_rank == mpi_size - 1) {
+    EXPECT_ARRAY_EQ(B2(_, 0, 1), A2(_, 0, 1));
+  }
 }
 
 TEST_F(NDAMpi, ReduceCustomType) {
